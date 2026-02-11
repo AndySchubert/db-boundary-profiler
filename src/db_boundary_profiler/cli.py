@@ -1,19 +1,112 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 from .metrics import RunStats, Timer, capture_process_snapshot, summarize_latencies_ms
 from .report import write_json
-from .workload import simulated_work
+from .workload import simulated_work, simulated_work_async
 
 
-def main() -> None:
+def run_sequential(
+    n: int,
+    latency_ms: int,
+    jitter_ms: int,
+    error_rate: float,
+) -> tuple[list[float], int]:
+    latencies_ms: list[float] = []
+    errors = 0
+
+    for _ in range(n):
+        t0 = time.perf_counter()
+        try:
+            simulated_work(latency_ms, jitter_ms, error_rate)
+        except Exception:
+            errors += 1
+        finally:
+            latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+
+    return latencies_ms, errors
+
+
+def run_threads(
+    n: int,
+    concurrency: int,
+    latency_ms: int,
+    jitter_ms: int,
+    error_rate: float,
+) -> tuple[list[float], int]:
+    latencies_ms: list[float] = []
+    errors = 0
+
+    def _one() -> None:
+        simulated_work(latency_ms, jitter_ms, error_rate)
+
+    with ThreadPoolExecutor(max_workers=concurrency) as ex:
+        futures: list[tuple[object, float]] = []
+        for _ in range(n):
+            futures.append((ex.submit(_one), time.perf_counter()))
+
+        for fut, t0 in futures:
+            try:
+                fut.result()
+            except Exception:
+                errors += 1
+            finally:
+                latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+
+    return latencies_ms, errors
+
+
+async def run_asyncio(
+    n: int,
+    concurrency: int,
+    latency_ms: int,
+    jitter_ms: int,
+    error_rate: float,
+) -> tuple[list[float], int]:
+    sem = asyncio.Semaphore(concurrency)
+    latencies_ms: list[float] = []
+    errors = 0
+
+    async def _one() -> float:
+        async with sem:
+            t0 = time.perf_counter()
+            await simulated_work_async(latency_ms, jitter_ms, error_rate)
+            return (time.perf_counter() - t0) * 1000.0
+
+    tasks = [asyncio.create_task(_one()) for _ in range(n)]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for r in results:
+        if isinstance(r, Exception):
+            errors += 1
+        else:
+            latencies_ms.append(float(r))
+
+    return latencies_ms, errors
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="dbbp",
-        description="DB Boundary Profiler (starter)",
+        description="DB Boundary Profiler",
     )
 
+    parser.add_argument(
+        "--mode",
+        choices=["seq", "threads", "async"],
+        default="seq",
+        help="execution mode",
+    )
+    parser.add_argument(
+        "--concurrency",
+        type=int,
+        default=10,
+        help="in-flight operations (threads/async)",
+    )
     parser.add_argument(
         "--requests",
         type=int,
@@ -44,21 +137,40 @@ def main() -> None:
         help="write results to a JSON file (e.g. experiments/baseline.json)",
     )
 
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> None:
+    args = build_parser().parse_args()
 
     cpu_user0, cpu_sys0, _ = capture_process_snapshot()
-    latencies_ms: list[float] = []
-    errors = 0
 
     with Timer() as t:
-        for _ in range(args.requests):
-            t0 = time.perf_counter()
-            try:
-                simulated_work(args.latency_ms, args.jitter_ms, args.error_rate)
-            except Exception:
-                errors += 1
-            finally:
-                latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+        if args.mode == "seq":
+            latencies_ms, errors = run_sequential(
+                args.requests,
+                args.latency_ms,
+                args.jitter_ms,
+                args.error_rate,
+            )
+        elif args.mode == "threads":
+            latencies_ms, errors = run_threads(
+                args.requests,
+                args.concurrency,
+                args.latency_ms,
+                args.jitter_ms,
+                args.error_rate,
+            )
+        else:
+            latencies_ms, errors = asyncio.run(
+                run_asyncio(
+                    args.requests,
+                    args.concurrency,
+                    args.latency_ms,
+                    args.jitter_ms,
+                    args.error_rate,
+                )
+            )
 
     cpu_user1, cpu_sys1, rss1 = capture_process_snapshot()
 
