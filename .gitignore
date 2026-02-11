@@ -206,6 +206,14 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-
-
+# experiment outputs
 experiments/*.json
+
+# python cache
+__pycache__/
+*.pyc
+
+# packaging artifacts
+*.egg-info/
+dist/
+build/

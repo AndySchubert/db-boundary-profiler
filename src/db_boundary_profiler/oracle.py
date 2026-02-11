@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from dataclasses import dataclass
 
 import oracledb
@@ -44,8 +45,18 @@ def make_pool(cfg: OracleConfig, min_size: int, max_size: int) -> oracledb.Conne
     )
 
 
-def ping(pool: oracledb.ConnectionPool) -> None:
+def ping_timed(pool: oracledb.ConnectionPool) -> tuple[float, float]:
+    """
+    Returns (acquire_ms, query_ms).
+    """
+    t0 = time.perf_counter()
     with pool.acquire() as conn:
+        t1 = time.perf_counter()
         with conn.cursor() as cur:
             cur.execute("SELECT 1 FROM dual")
             cur.fetchone()
+    t2 = time.perf_counter()
+
+    acquire_ms = (t1 - t0) * 1000.0
+    query_ms = (t2 - t1) * 1000.0
+    return acquire_ms, query_ms
