@@ -2,7 +2,7 @@
 name = "db-boundary-profiler"
 version = "0.1.0"
 description = "Measure latency/throughput and OS boundary overhead between app and database"
-authors = ["Your Name <you@example.com>"]
+authors = ["Andreas Schubert <andy.schubert@outlook.com>"]
 readme = "README.md"
 packages = [{ include = "db_boundary_profiler", from = "src" }]
 

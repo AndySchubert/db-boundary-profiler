@@ -32,3 +32,6 @@ test:
 
 clean:
 	rm -rf .pytest_cache .ruff_cache __pycache__ **/__pycache__
+
+baseline:
+	poetry run dbbp --requests 500 --latency-ms 8 --jitter-ms 4 --json experiments/baseline.json
