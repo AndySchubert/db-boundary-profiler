@@ -1,0 +1,16 @@
+site_name: db-boundary-profiler
+repo_url: https://github.com/AndySchubert/db-boundary-profiler
+repo_name: AndySchubert/db-boundary-profiler
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.tabs
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Experiments: experiments.md
+  - Results: results.md
+  - Report template: report-template.md

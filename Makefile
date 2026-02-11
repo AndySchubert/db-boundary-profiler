@@ -56,3 +56,12 @@ oracle-seq:
 
 oracle-threads:
 	poetry run dbbp --workload oracle --mode threads --concurrency 20 --requests 500 --json experiments/oracle-threads.json
+
+docs-render:
+	poetry run python scripts/render_results.py
+
+docs-serve: docs-render
+	poetry run mkdocs serve
+
+docs-build: docs-render
+	poetry run mkdocs build
