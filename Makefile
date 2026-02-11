@@ -50,3 +50,9 @@ threads-json:
 
 async-json:
 	poetry run dbbp --mode async --concurrency 200 --requests 2000 --latency-ms 8 --jitter-ms 4 --json experiments/async.json
+
+oracle-seq:
+	poetry run dbbp --workload oracle --mode seq --requests 200 --json experiments/oracle-seq.json
+
+oracle-threads:
+	poetry run dbbp --workload oracle --mode threads --concurrency 20 --requests 500 --json experiments/oracle-threads.json
