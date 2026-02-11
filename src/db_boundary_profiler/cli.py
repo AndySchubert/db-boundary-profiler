@@ -293,7 +293,25 @@ def main() -> None:
         )
 
     if args.json:
-        write_json(stats, args.json)
+        extra = None
+
+        if args.workload == "oracle":
+            extra = {
+                "oracle": {
+                    "acquire_ms": {
+                        "p50": acq_p50,
+                        "p95": acq_p95,
+                        "p99": acq_p99,
+                    },
+                    "query_ms": {
+                        "p50": qry_p50,
+                        "p95": qry_p95,
+                        "p99": qry_p99,
+                    },
+                }
+            }
+
+        write_json(stats, args.json, extra=extra)
         print(f"Wrote JSON report to: {args.json}")
 
     if oracle_pool is not None:

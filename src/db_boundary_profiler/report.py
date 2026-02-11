@@ -14,12 +14,22 @@ def stats_to_dict(stats: RunStats) -> dict[str, Any]:
     return d
 
 
-def write_json(stats: RunStats, path: str) -> None:
+def write_json(
+    stats: RunStats,
+    path: str,
+    extra: dict | None = None,
+) -> None:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
+
+    data = stats_to_dict(stats)
+
+    if extra:
+        data.update(extra)
+
     p.write_text(
         json.dumps(
-            stats_to_dict(stats),
+            data,
             indent=2,
             sort_keys=True,
         )
