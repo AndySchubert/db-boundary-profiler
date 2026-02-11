@@ -35,3 +35,18 @@ clean:
 
 baseline:
 	poetry run dbbp --requests 500 --latency-ms 8 --jitter-ms 4 --json experiments/baseline.json
+
+threads:
+	poetry run dbbp --mode threads --concurrency 50 --requests 1000 --latency-ms 8 --jitter-ms 4
+
+async:
+	poetry run dbbp --mode async --concurrency 200 --requests 2000 --latency-ms 8 --jitter-ms 4
+
+seq-json:
+	poetry run dbbp --mode seq --requests 500 --latency-ms 8 --jitter-ms 4 --json experiments/seq.json
+
+threads-json:
+	poetry run dbbp --mode threads --concurrency 50 --requests 1000 --latency-ms 8 --jitter-ms 4 --json experiments/threads.json
+
+async-json:
+	poetry run dbbp --mode async --concurrency 200 --requests 2000 --latency-ms 8 --jitter-ms 4 --json experiments/async.json

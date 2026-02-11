@@ -1,0 +1,16 @@
+{
+  "cpu_system_s": 0.0,
+  "cpu_user_s": 0.0,
+  "ctx_switch_involuntary": 0,
+  "ctx_switch_voluntary": 500,
+  "duration_s": 4.012525871999969,
+  "errors": 0,
+  "latency_ms": {
+    "p50": 8.07598399978815,
+    "p95": 12.073256850408143,
+    "p99": 12.076765130586864
+  },
+  "n": 500,
+  "rps": 124.6097884350299,
+  "rss_mb": 21.9375
+}
