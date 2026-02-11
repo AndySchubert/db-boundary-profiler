@@ -138,6 +138,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     parser.add_argument(
+        "--pool-max",
+        type=int,
+        default=0,
+        help="max connection pool size (0 = use concurrency)",
+    )
+
+    parser.add_argument(
         "--requests",
         type=int,
         default=200,
@@ -184,19 +191,26 @@ def main() -> None:
         )
 
     oracle_pool = None
+    oracle_acquire_ms: list[float] = []
+    oracle_query_ms: list[float] = []
 
     if args.workload == "oracle":
-        from .oracle import config_from_env, make_pool, ping
+        from .oracle import config_from_env, make_pool, ping_timed
 
         cfg = config_from_env()
+
+        pool_max = args.pool_max if args.pool_max > 0 else args.concurrency
+
         oracle_pool = make_pool(
             cfg,
             min_size=1,
-            max_size=max(2, args.concurrency),
+            max_size=max(2, pool_max),
         )
 
         def work() -> None:
-            ping(oracle_pool)
+            acquire_ms, query_ms = ping_timed(oracle_pool)
+            oracle_acquire_ms.append(acquire_ms)
+            oracle_query_ms.append(query_ms)
 
     else:
 
@@ -222,13 +236,15 @@ def main() -> None:
                 args.requests,
                 work,
             )
+
         elif args.mode == "threads":
             latencies_ms, errors = run_threads(
                 args.requests,
                 args.concurrency,
                 work,
             )
-        else:
+
+        elif args.mode == "async":
             latencies_ms, errors = asyncio.run(
                 run_asyncio(
                     args.requests,
@@ -236,10 +252,19 @@ def main() -> None:
                     work_async,
                 )
             )
+        else:
+            raise ValueError(f"Unsupported mode: {args.mode}")
 
     cpu_user1, cpu_sys1, rss1, v1, iv1 = capture_process_snapshot()
 
     p50, p95, p99 = summarize_latencies_ms(latencies_ms)
+    acq_p50 = acq_p95 = acq_p99 = 0.0
+    qry_p50 = qry_p95 = qry_p99 = 0.0
+
+    if args.workload == "oracle":
+        acq_p50, acq_p95, acq_p99 = summarize_latencies_ms(oracle_acquire_ms)
+        qry_p50, qry_p95, qry_p99 = summarize_latencies_ms(oracle_query_ms)
+
     duration = t.elapsed_s
     rps = args.requests / duration if duration > 0 else 0.0
 
@@ -259,6 +284,13 @@ def main() -> None:
     )
 
     print(stats.to_text())
+
+    if args.workload == "oracle":
+        print(
+            "Oracle breakdown (ms): "
+            f"acquire p50={acq_p50:.2f} p95={acq_p95:.2f} p99={acq_p99:.2f} | "
+            f"query p50={qry_p50:.2f} p95={qry_p95:.2f} p99={qry_p99:.2f}"
+        )
 
     if args.json:
         write_json(stats, args.json)
