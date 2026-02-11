@@ -293,22 +293,28 @@ def main() -> None:
         )
 
     if args.json:
-        extra = None
+        extra: dict = {
+            "meta": {
+                "workload": args.workload,
+                "mode": args.mode,
+                "concurrency": args.concurrency,
+                "pool_max": args.pool_max,
+                "requests": args.requests,
+            }
+        }
 
         if args.workload == "oracle":
-            extra = {
-                "oracle": {
-                    "acquire_ms": {
-                        "p50": acq_p50,
-                        "p95": acq_p95,
-                        "p99": acq_p99,
-                    },
-                    "query_ms": {
-                        "p50": qry_p50,
-                        "p95": qry_p95,
-                        "p99": qry_p99,
-                    },
-                }
+            extra["oracle"] = {
+                "acquire_ms": {
+                    "p50": acq_p50,
+                    "p95": acq_p95,
+                    "p99": acq_p99,
+                },
+                "query_ms": {
+                    "p50": qry_p50,
+                    "p95": qry_p95,
+                    "p99": qry_p99,
+                },
             }
 
         write_json(stats, args.json, extra=extra)
