@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 
 from .metrics import RunStats, Timer, capture_process_snapshot, summarize_latencies_ms
 from .report import write_json
@@ -45,17 +45,36 @@ def run_threads(
         simulated_work(latency_ms, jitter_ms, error_rate)
 
     with ThreadPoolExecutor(max_workers=concurrency) as ex:
-        futures: list[tuple[object, float]] = []
-        for _ in range(n):
-            futures.append((ex.submit(_one), time.perf_counter()))
+        in_flight: dict[object, float] = {}
 
-        for fut, t0 in futures:
-            try:
-                fut.result()
-            except Exception:
-                errors += 1
-            finally:
-                latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+        def submit_one() -> None:
+            fut = ex.submit(_one)
+            in_flight[fut] = time.perf_counter()
+
+        # Fill the pipeline
+        initial = min(concurrency, n)
+        for _ in range(initial):
+            submit_one()
+
+        submitted = initial
+        completed = 0
+
+        while completed < n:
+            done, _ = wait(in_flight.keys(), return_when=FIRST_COMPLETED)
+
+            for fut in done:
+                t0 = in_flight.pop(fut)
+                try:
+                    fut.result()
+                except Exception:
+                    errors += 1
+                finally:
+                    latencies_ms.append((time.perf_counter() - t0) * 1000.0)
+                    completed += 1
+
+                if submitted < n:
+                    submit_one()
+                    submitted += 1
 
     return latencies_ms, errors
 
@@ -143,7 +162,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
 
-    cpu_user0, cpu_sys0, _ = capture_process_snapshot()
+    cpu_user0, cpu_sys0, _, v0, iv0 = capture_process_snapshot()
 
     with Timer() as t:
         if args.mode == "seq":
@@ -172,7 +191,7 @@ def main() -> None:
                 )
             )
 
-    cpu_user1, cpu_sys1, rss1 = capture_process_snapshot()
+    cpu_user1, cpu_sys1, rss1, v1, iv1 = capture_process_snapshot()
 
     p50, p95, p99 = summarize_latencies_ms(latencies_ms)
     duration = t.elapsed_s
@@ -189,6 +208,8 @@ def main() -> None:
         cpu_user_s=max(0.0, cpu_user1 - cpu_user0),
         cpu_system_s=max(0.0, cpu_sys1 - cpu_sys0),
         rss_mb=rss1,
+        ctx_switch_voluntary=max(0, v1 - v0),
+        ctx_switch_involuntary=max(0, iv1 - iv0),
     )
 
     print(stats.to_text())
